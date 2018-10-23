@@ -1,0 +1,9 @@
+[package]
+name = "lwebservr"
+version = "0.1.0"
+authors = ["Christian Franke <chriss@frankeonline.net>"]
+
+[dependencies]
+clap = "2.26.0"
+regex = "1"
+dirs = "1.0.4"
