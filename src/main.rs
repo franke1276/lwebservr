@@ -27,6 +27,11 @@ fn main() {
                 .short("v")
                 .long("verbose")
                 .help("verbose"),
+        ).arg(
+            Arg::with_name("silent")
+                .short("s")
+                .long("silent")
+                .help("silent"),
         ).get_matches();
     let port = matches
         .value_of("port")
@@ -35,19 +40,22 @@ fn main() {
         .expect("port must be a number between 1 and 65535");
 
     let verbose = matches.is_present("verbose");
+    let silent = matches.is_present("silent");
 
+    if !silent {
     println!(
         "Starting webserver on port {}, files will be served from {}",
         port,
         std::env::current_dir().unwrap().display()
     );
+    }
 
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
-        handle_connection(stream, verbose, &re);
+        handle_connection(stream, verbose, silent,&re);
     }
 }
 
@@ -65,7 +73,7 @@ impl HttpResult {
             body: body,
         }
     }
-    fn not_fount() -> HttpResult {
+    fn not_found() -> HttpResult {
         HttpResult {
             status: 404,
             msg: "Not Found".to_owned(),
@@ -81,7 +89,7 @@ impl HttpResult {
     }
 }
 
-fn handle_connection(mut stream: TcpStream, verbose: bool, re: &Regex) {
+fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Regex) {
     let mut buffer = [0; 512];
 
     stream.read(&mut buffer).unwrap();
@@ -101,14 +109,16 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, re: &Regex) {
         _x => Ok(HttpResult::method_not_allowed()),
     }).unwrap();
 
-    println!(
-        "{method} /{path} from {ip} -> {status} {msg}",
-        method = method,
-        path = path,
-        ip = ip,
-        status = result.status,
-        msg = result.msg
-    );
+    if !silent {
+        println!(
+            "{method} /{path} from {ip} -> {status} {msg}",
+            method = method,
+            path = path,
+            ip = ip,
+            status = result.status,
+            msg = result.msg
+        );
+    }
     let response_body = match result.status  {
         200 => 
             format!(
@@ -117,7 +127,7 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, re: &Regex) {
                 length=result.body.len(),
                 body=result.body
             ),
-        _e =>format!("HTTP/1.0 {status} {msg}\r\n\r\n", status=result.status, msg=result.msg)
+        _e =>format!("HTTP/1.0 {status} {msg}\r\n", status=result.status, msg=result.msg)
     };
 
     stream.write(response_body.as_bytes()).unwrap();
@@ -136,5 +146,5 @@ fn handle_get(path: &str) -> Result<HttpResult, HttpResult> {
     let mut path_to_file = std::env::current_dir().unwrap();
     path_to_file.push(filename);
     fs::read_to_string(path_to_file)
-        .map(|content| HttpResult::ok(content)).or(Ok(HttpResult::not_fount()))
+        .map(|content| HttpResult::ok(content)).or(Ok(HttpResult::not_found()))
 }
