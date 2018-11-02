@@ -18,6 +18,7 @@ mod errors {
 
 use errors::*;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
      if let Err(ref e) = run() {
@@ -36,7 +37,7 @@ fn run() -> Result<()> {
     let re = Regex::new(r"([^ ]+) /([^ ]*) (.*)").unwrap();
 
     let matches = App::new("lwebservr")
-        .version("1.0")
+        .version(VERSION)
         .author("chriss@frankeonline.net")
         .about("Serve local files via http")
         .arg(
@@ -79,7 +80,7 @@ fn run() -> Result<()> {
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
-        handle_connection(stream, verbose, silent,&re);
+        handle_connection(stream, verbose, silent,&re)?;
     }
     Ok(())
 }
