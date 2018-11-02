@@ -51,6 +51,36 @@ fn main() {
     }
 }
 
+#[derive(Debug)]
+struct HttpResult {
+    status: u16,
+    msg: String,
+    body: String ,
+}
+impl HttpResult {
+    fn ok(body: String) -> HttpResult {
+        HttpResult {
+            status: 200,
+            msg: "OK".to_owned(),
+            body: body,
+        }
+    }
+    fn not_fount() -> HttpResult {
+        HttpResult {
+            status: 404,
+            msg: "Not Found".to_owned(),
+            body: "".to_owned(),
+        }
+    }
+    fn method_not_allowed() -> HttpResult {
+        HttpResult {
+            status: 405,
+            msg: "Method not allowed".to_owned(),
+            body: "".to_owned(),
+        }
+    }
+}
+
 fn handle_connection(mut stream: TcpStream, verbose: bool, re: &Regex) {
     let mut buffer = [0; 512];
 
@@ -64,39 +94,47 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, re: &Regex) {
     let method = caps.get(1).unwrap().as_str();
     let path = caps.get(2).unwrap().as_str();
 
-    let filename = match path {
-        "" => "index.html",
-        p => p,
-    };
-
-    let mut path_to_file = std::env::current_dir().unwrap();
-    path_to_file.push(filename);
-
     let ip = stream.peer_addr().unwrap().ip();
-    println!(
-        "{} /{} from {} -> {}",
-        method,
-        path,
-        ip,
-        path_to_file
-            .strip_prefix(std::env::current_dir().unwrap())
-            .unwrap()
-            .display()
-    );
 
-    let response = match fs::read_to_string(path_to_file) {
-        Ok(c) => format!(
-            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
-            c.len(),
-            c
-        ),
-        Err(_) => format!("HTTP/1.0 404 OK\r\n\r\n"),
+    let result = (match method.to_uppercase().as_str() {
+        "GET" => handle_get(path),
+        _x => Ok(HttpResult::method_not_allowed()),
+    }).unwrap();
+
+    println!(
+        "{method} /{path} from {ip} -> {status} {msg}",
+        method = method,
+        path = path,
+        ip = ip,
+        status = result.status,
+        msg = result.msg
+    );
+    let response_body = match result.status  {
+        200 => 
+            format!(
+                "HTTP/1.0 {status}\r\nContent-Type: text/html\r\nContent-Length: {length}\r\n\r\n{body}",
+                status=result.status,
+                length=result.body.len(),
+                body=result.body
+            ),
+        _e =>format!("HTTP/1.0 {status} {msg}\r\n\r\n", status=result.status, msg=result.msg)
     };
 
-    stream.write(response.as_bytes()).unwrap();
+    stream.write(response_body.as_bytes()).unwrap();
     stream.flush().unwrap();
 
     if verbose {
         println!("{}", request);
     }
+}
+
+fn handle_get(path: &str) -> Result<HttpResult, HttpResult> {
+    let filename = match path {
+        "" => "index.html",
+        p => p,
+    };
+    let mut path_to_file = std::env::current_dir().unwrap();
+    path_to_file.push(filename);
+    fs::read_to_string(path_to_file)
+        .map(|content| HttpResult::ok(content)).or(Ok(HttpResult::not_fount()))
 }
