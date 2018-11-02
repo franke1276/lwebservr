@@ -116,16 +116,16 @@ impl HttpResult {
     }
 }
 
-fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Regex) {
+fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Regex) -> Result<()> {
     let mut buffer = [0; 512];
 
-    stream.read(&mut buffer).unwrap();
+    stream.read(&mut buffer).chain_err(|| "could not read from tcp stream")?;
     let request = String::from_utf8_lossy(&buffer[..]);
     let mut request_lines = request.lines();
 
-    let first_line = request_lines.next().unwrap();
+    let first_line = request_lines.next().ok_or("no next line")?;
 
-    let caps = re.captures(&first_line).unwrap();
+    let caps = re.captures(&first_line).ok_or("bad first http line")?;
     let method = caps.get(1).unwrap().as_str();
     let path = caps.get(2).unwrap().as_str();
 
@@ -163,6 +163,7 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Re
     if verbose {
         println!("{}", request);
     }
+    Ok(())
 }
 
 fn handle_get(path: &str) -> Result<HttpResult> {
