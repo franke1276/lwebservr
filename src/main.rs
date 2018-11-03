@@ -130,11 +130,11 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Re
 
     let first_line = request_lines.next().ok_or("no next line")?;
 
-    let caps = re.captures(&first_line).ok_or("bad first http line")?;
-    let method = caps.get(1).unwrap().as_str();
-    let path = caps.get(2).unwrap().as_str();
+    let caps = re.captures(first_line).ok_or("bad first http line")?;
+    let method = caps.get(1).ok_or("could not get method part")?.as_str();
+    let path = caps.get(2).ok_or("could not get method part")?.as_str();
 
-    let ip = stream.peer_addr().unwrap().ip();
+    let ip = stream.peer_addr().chain_err(|| "could not get ip")?.ip();
 
     let result = (match method.to_uppercase().as_str() {
         "GET" => handle_get(path),
