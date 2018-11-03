@@ -86,33 +86,33 @@ fn run() -> Result<()> {
 }
 
 #[derive(Debug)]
-struct HttpResult {
+struct HttpResult<'a> {
     status: u16,
-    msg: String,
+    msg: &'a str,
     body: String,
-    content_type: Option<String>,
+    content_type: Option<&'a str>,
 }
-impl HttpResult {
-    fn ok(content_type: String, body: String) -> HttpResult {
+impl<'a> HttpResult<'a> {
+    fn ok(content_type: &'a str, body: String) -> HttpResult<'a> {
         HttpResult {
             status: 200,
-            msg: "OK".to_owned(),
+            msg: "OK",
             body: body,
             content_type: Some(content_type),
         }
     }
-    fn not_found() -> HttpResult {
+    fn not_found() -> HttpResult<'a> {
         HttpResult {
             status: 404,
-            msg: "Not Found".to_owned(),
+            msg: "Not Found",
             body: "".to_owned(),
             content_type: None,
         }
     }
-    fn method_not_allowed() -> HttpResult {
+    fn method_not_allowed() -> HttpResult<'a> {
         HttpResult {
             status: 405,
-            msg: "Method not allowed".to_owned(),
+            msg: "Method not allowed",
             body: "".to_owned(),
             content_type: None,
         }
@@ -177,18 +177,15 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Re
     }
     Ok(())
 }
-fn calculate_content_type(filename: String) -> String {
+fn calculate_content_type(filename: &str) -> &str {
     let mut v: Vec<&str> = filename.split('.').collect();
     match v.pop() {
-        Some("html") => "text/html".to_owned(),
-        Some("png") => "image/png".to_owned(),
-        Some("txt") => "text/plain".to_owned(),
-        Some("js") => "text/javascript".to_owned(),
-        Some("css") => "text/css".to_owned(),
-        x => {
-            println!("{:?}", x);
-            "application/octet-stream".to_owned()
-        }
+        Some("html") => "text/html",
+        Some("png") => "image/png",
+        Some("txt") => "text/plain",
+        Some("js") => "text/javascript",
+        Some("css") => "text/css",
+        _x => "application/octet-stream",
     }
 }
 fn handle_get(path: &str) -> Result<HttpResult> {
@@ -196,7 +193,7 @@ fn handle_get(path: &str) -> Result<HttpResult> {
         "" => "index.html",
         p => p,
     };
-    let content_type = calculate_content_type(filename.to_owned());
+    let content_type = calculate_content_type(filename);
     let mut path_to_file = std::env::current_dir().unwrap();
     path_to_file.push(filename);
     fs::read_to_string(path_to_file)
@@ -210,13 +207,10 @@ mod tests {
 
     #[test]
     fn calculate_content_type_test() {
-        assert_eq!(
-            "text/html".to_owned(),
-            calculate_content_type("index.html".to_owned())
-        );
+        assert_eq!("text/html".to_owned(), calculate_content_type("index.html"));
         assert_eq!(
             "application/octet-stream".to_owned(),
-            calculate_content_type("index.pdf".to_owned())
+            calculate_content_type("index.pdf")
         );
     }
 }
