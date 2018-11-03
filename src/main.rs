@@ -11,7 +11,6 @@ use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
-
 mod errors {
     error_chain!{}
 }
@@ -21,7 +20,7 @@ use errors::*;
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
-     if let Err(ref e) = run() {
+    if let Err(ref e) = run() {
         println!("error: {}", e);
         for e in e.iter().skip(1) {
             println!("caused by: {}", e);
@@ -75,30 +74,31 @@ fn run() -> Result<()> {
         );
     }
 
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).chain_err(|| format!("could not bind to 127.0.0.1:{}", port))?;
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
+        .chain_err(|| format!("could not bind to 127.0.0.1:{}", port))?;
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
-        handle_connection(stream, verbose, silent,&re)?;
+        handle_connection(stream, verbose, silent, &re)?;
     }
     Ok(())
 }
-
-
 
 #[derive(Debug)]
 struct HttpResult {
     status: u16,
     msg: String,
-    body: String ,
+    body: String,
+    content_type: Option<String>,
 }
 impl HttpResult {
-    fn ok(body: String) -> HttpResult {
+    fn ok(content_type: String, body: String) -> HttpResult {
         HttpResult {
             status: 200,
             msg: "OK".to_owned(),
             body: body,
+            content_type: Some(content_type),
         }
     }
     fn not_found() -> HttpResult {
@@ -106,6 +106,7 @@ impl HttpResult {
             status: 404,
             msg: "Not Found".to_owned(),
             body: "".to_owned(),
+            content_type: None,
         }
     }
     fn method_not_allowed() -> HttpResult {
@@ -113,6 +114,7 @@ impl HttpResult {
             status: 405,
             msg: "Method not allowed".to_owned(),
             body: "".to_owned(),
+            content_type: None,
         }
     }
 }
@@ -120,7 +122,9 @@ impl HttpResult {
 fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Regex) -> Result<()> {
     let mut buffer = [0; 512];
 
-    stream.read(&mut buffer).chain_err(|| "could not read from tcp stream")?;
+    stream
+        .read(&mut buffer)
+        .chain_err(|| "could not read from tcp stream")?;
     let request = String::from_utf8_lossy(&buffer[..]);
     let mut request_lines = request.lines();
 
@@ -147,15 +151,22 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Re
             msg = result.msg
         );
     }
-    let response_body = match result.status  {
-        200 => 
-            format!(
-                "HTTP/1.0 {status}\r\nContent-Type: text/html\r\nContent-Length: {length}\r\n\r\n{body}",
-                status=result.status,
-                length=result.body.len(),
-                body=result.body
-            ),
-        _e =>format!("HTTP/1.0 {status} {msg}\r\n", status=result.status, msg=result.msg)
+    let response_body = match result.status {
+        200 => format!(
+            "HTTP/1.0 {status}\r\n{content_type}Content-Length: {length}\r\n\r\n{body}",
+            status = result.status,
+            length = result.body.len(),
+            body = result.body,
+            content_type = result
+                .content_type
+                .map(|c| format!("Content-Type: {}\r\n", c))
+                .unwrap_or("".to_owned())
+        ),
+        _e => format!(
+            "HTTP/1.0 {status} {msg}\r\n",
+            status = result.status,
+            msg = result.msg
+        ),
     };
 
     stream.write(response_body.as_bytes()).unwrap();
@@ -166,14 +177,46 @@ fn handle_connection(mut stream: TcpStream, verbose: bool, silent: bool, re: &Re
     }
     Ok(())
 }
-
+fn calculate_content_type(filename: String) -> String {
+    let mut v: Vec<&str> = filename.split('.').collect();
+    match v.pop() {
+        Some("html") => "text/html".to_owned(),
+        Some("png") => "image/png".to_owned(),
+        Some("txt") => "text/plain".to_owned(),
+        Some("js") => "text/javascript".to_owned(),
+        Some("css") => "text/css".to_owned(),
+        x => {
+            println!("{:?}", x);
+            "application/octet-stream".to_owned()
+        }
+    }
+}
 fn handle_get(path: &str) -> Result<HttpResult> {
     let filename = match path {
         "" => "index.html",
         p => p,
     };
+    let content_type = calculate_content_type(filename.to_owned());
     let mut path_to_file = std::env::current_dir().unwrap();
     path_to_file.push(filename);
     fs::read_to_string(path_to_file)
-        .map(|content| HttpResult::ok(content)).or(Ok(HttpResult::not_found()))
+        .map(|content| HttpResult::ok(content_type, content))
+        .or(Ok(HttpResult::not_found()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calculate_content_type_test() {
+        assert_eq!(
+            "text/html".to_owned(),
+            calculate_content_type("index.html".to_owned())
+        );
+        assert_eq!(
+            "application/octet-stream".to_owned(),
+            calculate_content_type("index.pdf".to_owned())
+        );
+    }
 }
