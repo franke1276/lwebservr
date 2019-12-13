@@ -18,12 +18,11 @@ mod errors {
 use errors::*;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
 fn main() {
     if let Err(ref e) = run() {
         println!("error: {}", e);
         for e in e.iter().skip(1) {
-            println!("caused by: {}", e);
+            println!("caused by: {}", e)
         }
         if let Some(backtrace) = e.backtrace() {
             println!("backtrace: {:?}", backtrace);
@@ -31,7 +30,8 @@ fn main() {
         std::process::exit(1);
     }
 }
-
+fn take(s:String) ->() {
+}
 fn run() -> Result<()> {
     let re = Regex::new(r"([^ ]+) /([^ ]*) (.*)").unwrap();
 
@@ -65,7 +65,9 @@ fn run() -> Result<()> {
 
     let verbose = matches.is_present("verbose");
     let silent = matches.is_present("silent");
-
+    let a = "HALLO".to_string();
+    take(a.clone());
+    println!("{}",a);
     if !silent {
         println!(
             "Starting webserver on port {}, files will be served from {}",
